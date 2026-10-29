@@ -1,12 +1,9 @@
 
 import random
 import time
+from datetime import datetime, timezone
 
-from app.models.job import (
-    Job,
-    JobStatus,
-    ExecutionTarget,
-)
+from app.models.job import Job, JobStatus, ExecutionTarget
 
 
 class ClassicalExecutor:
@@ -24,11 +21,7 @@ class ClassicalExecutor:
 
         job.target = ExecutionTarget.CLASSICAL
         job.status = JobStatus.RUNNING
-        job.started_at = __import__(
-            "datetime"
-        ).datetime.now(
-            __import__("datetime").timezone.utc
-        )
+        job.started_at = datetime.now(timezone.utc)
 
         try:
             jitter = random.uniform(0.85, 1.15)
@@ -57,8 +50,4 @@ class ClassicalExecutor:
             raise
 
         finally:
-            job.completed_at = __import__(
-                "datetime"
-            ).datetime.now(
-                __import__("datetime").timezone.utc
-            )
+            job.completed_at = datetime.now(timezone.utc)
