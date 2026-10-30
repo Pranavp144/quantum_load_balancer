@@ -40,14 +40,17 @@ def run_benchmark(
         jobs: list[Job] = copy.deepcopy(workload)
         manager = QueueManager(policy=policy)
 
-        wall_start = time.perf_counter()
-        manager.run_batch(jobs)
-        wall_seconds = time.perf_counter() - wall_start
+        try:
+            wall_start = time.perf_counter()
+            manager.run_batch(jobs)
+            wall_seconds = time.perf_counter() - wall_start
 
-        results[name] = {
-            **manager.summary(),
-            "wall_clock_seconds": round(wall_seconds, 4),
-        }
+            results[name] = {
+                **manager.summary(),
+                "wall_clock_seconds": round(wall_seconds, 4),
+            }
+        finally:
+            manager.shutdown()
 
     report = {
         "configuration": {
