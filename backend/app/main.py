@@ -1,10 +1,28 @@
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app.models.job import Job
 from app.services.queue_manager import QueueManager, create_policy
 from app.benchmark import run_benchmark
+
+
+# Keep one manager per policy so metrics accumulate independently.
+MANAGERS = {
+    name: QueueManager(policy=create_policy(name))
+    for name in ("random", "greedy", "predictive")
+}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage worker-pool lifecycle."""
+    yield
+
+    for manager in MANAGERS.values():
+        manager.shutdown()
 
 
 app = FastAPI(
@@ -14,13 +32,8 @@ app = FastAPI(
         "classical and simulated quantum workloads."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
-
-# Keep one manager per policy so metrics accumulate independently.
-MANAGERS = {
-    name: QueueManager(policy=create_policy(name))
-    for name in ("random", "greedy", "predictive")
-}
 
 
 class JobSubmission(BaseModel):
