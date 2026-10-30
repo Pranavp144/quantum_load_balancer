@@ -1,68 +1,90 @@
 # Quantum Load Balancer (QLB)
 
-A cost-and-latency-aware scheduler for hybrid classical–quantum workloads, built with Python, FastAPI, and Qiskit Aer.
+A cost-and-latency-aware scheduler for hybrid classical--quantum
+workloads, built with **Python, FastAPI, and Qiskit Aer**.
 
-QLB models a resource-management layer that routes submitted jobs to either a classical execution path or a simulated quantum backend. Scheduling decisions consider estimated runtime, execution cost, priority, queue-length inputs, and optional deadlines.
+QLB routes submitted jobs to either a classical execution path or a
+simulated quantum backend. Scheduling decisions consider estimated
+runtime, execution cost, job priority, queue-length inputs, and optional
+deadlines.
 
-> **Scope note:** Quantum execution currently uses the local Qiskit Aer simulator. The project does not require real quantum hardware. The initial orchestration path is synchronous; distributed asynchronous workers and the React dashboard are planned extensions.
+> **Scope:** Quantum jobs run locally using the Qiskit Aer simulator.
+> This project does not require or connect to physical quantum hardware.
+> It is a focused academic prototype, not a production distributed
+> orchestration platform.
 
 ## Features
 
-- **Job model:** Tracks workload estimates, priority, deadline, execution target, status, timestamps, and results.
-- **Classical executor:** Simulates CPU runtime with small random jitter and records the simulated duration.
-- **Quantum executor:** Builds and runs measured quantum circuits using Qiskit Aer.
-- **Pluggable scheduling policies:**
-  - `random` — baseline routing policy.
-  - `greedy` — weighted cost-and-latency decision, with time-first handling for high-priority jobs.
-  - `predictive` — starts with a greedy decision and can override it when the alternative resource is estimated to meet a deadline.
-- **Metrics:** Tracks estimated execution cost, wait time, turnaround time, deadline violations, routing split, and failed jobs.
-- **Workload generator:** Produces reproducible synthetic jobs with steady or burst arrival timestamps.
-- **Benchmarking:** Runs policies against copies of the same generated workload.
-- **REST API:** FastAPI endpoints for health checks, listing policies, submitting jobs, and running benchmarks.
+-   **Job lifecycle:** Tracks job details, priority, deadlines,
+    execution target, status, timestamps, results, and errors.
+-   **Classical executor:** Simulates classical execution time with
+    small random variation.
+-   **Quantum executor:** Builds, transpiles, and executes measured
+    quantum circuits using Qiskit Aer.
+-   **Three scheduling policies:**
+    -   `random` --- baseline resource selection.
+    -   `greedy` --- weighted cost-and-latency selection, with
+        speed-first handling for high-priority jobs.
+    -   `predictive` --- deadline-aware routing layered on the weighted
+        policy.
+-   **Concurrent resource pools:** Uses separate thread pools for
+    classical and quantum jobs, with configurable worker limits.
+-   **Metrics:** Reports execution cost, average wait time, turnaround
+    time, deadline violations, resource distribution, and failed jobs.
+-   **Workload generation:** Creates reproducible synthetic workloads
+    with steady or burst arrival patterns.
+-   **Benchmarking:** Compares the three policies using copies of the
+    same generated workload.
+-   **REST API:** FastAPI endpoints for health checks, policy listing,
+    job submission, and benchmark execution.
+-   **Automated tests:** The current project test suite has **43 passing
+    tests**.
 
 ## Architecture
 
-```text
-Client / Workload Generator
-            |
-            v
-      FastAPI Service
-            |
-            v
-      QueueManager
-            |
-            v
-     Scheduling Policy
-       /           \
-      v             v
-Classical         Quantum
-Executor          Executor
-      \             /
-       v           v
-         Run Metrics
-              |
-              v
-      Benchmark Results
+``` text
+             Client / Workload Generator
+                        |
+                        v
+                  FastAPI Service
+                        |
+                        v
+                   QueueManager
+                        |
+                        v
+                 Scheduling Policy
+                  /             \
+                 v               v
+          Classical Pool    Quantum Pool
+                 |               |
+                 v               v
+          Classical          Qiskit Aer
+           Executor           Executor
+                 \               /
+                  v             v
+                    Run Metrics
+                        |
+                        v
+                 Benchmark Report
 ```
 
 ## Technology stack
 
-- Python 3.12+
-- FastAPI
-- Uvicorn
-- Pydantic
-- Qiskit
-- Qiskit Aer
-- pytest
-- HTTPX
+-   Python 3.12+
+-   FastAPI
+-   Uvicorn
+-   Pydantic
+-   Qiskit
+-   Qiskit Aer
+-   pytest
+-   HTTPX
 
 ## Project structure
 
-```text
+``` text
 quantum-load-balancer/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
 │   │   ├── main.py
 │   │   ├── benchmark.py
 │   │   ├── workload_generator.py
@@ -85,78 +107,97 @@ quantum-load-balancer/
 
 ## Setup
 
-Run these commands from the repository root on Linux/macOS:
+Run these commands from the repository root on Linux or macOS:
 
-```bash
+``` bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install fastapi "uvicorn[standard]" qiskit qiskit-aer pytest httpx
+python -m pip install -r backend/requirements.txt
 ```
 
-If a `backend/requirements.txt` file is present, you can install from it instead:
+If `backend/requirements.txt` is not available in your checkout, install
+the dependencies directly:
 
-```bash
-python -m pip install -r backend/requirements.txt
+``` bash
+python -m pip install fastapi "uvicorn[standard]" qiskit qiskit-aer pytest httpx
 ```
 
 ## Run tests
 
 From the repository root:
 
-```bash
+``` bash
 PYTHONPATH=backend pytest backend/tests/ -v
 ```
 
-The core suite reached **29 passing tests** before the API integration tests were added. Re-run the command above after each change to verify the current state.
+**Current verified result: 43 tests passed.**
+
+Run the suite again after making changes.
 
 ## Run the API
 
 Start the development server from the repository root:
 
-```bash
+``` bash
 PYTHONPATH=backend python -m uvicorn app.main:app --reload --port 8000 --app-dir backend
 ```
 
-Then open:
+Open the interactive API documentation:
 
-- API documentation: http://127.0.0.1:8000/docs
-- Health check: http://127.0.0.1:8000/health
+-   Swagger UI: <http://127.0.0.1:8000/docs>
+-   Health check: <http://127.0.0.1:8000/health>
 
-### Available endpoints
+### API endpoints
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/health` | Check service health |
-| `GET` | `/policies` | List scheduling policies |
-| `POST` | `/jobs/submit?policy=greedy` | Submit a job using a selected policy |
-| `POST` | `/benchmark/run` | Compare policies on a generated workload |
+  ------------------------------------------------------------------------------
+  Method                  Endpoint                       Purpose
+  ----------------------- ------------------------------ -----------------------
+  `GET`                   `/health`                      Check service health
 
-Example job request:
+  `GET`                   `/policies`                    List available
+                                                         scheduling policies
 
-```json
+  `POST`                  `/jobs/submit?policy=greedy`   Submit a job using the
+                                                         selected policy
+
+  `POST`                  `/benchmark/run`               Run a policy comparison
+                                                         benchmark
+  ------------------------------------------------------------------------------
+
+Use the Swagger UI at `/docs` to inspect request schemas and try the
+endpoints.
+
+Example job request (field names should match the API schema):
+
+``` json
 {
   "name": "Quantum-friendly workload",
   "classical_runtime": 5.0,
   "quantum_runtime": 1.0,
   "priority": 3,
-  "num_qubits": 2
+  "qubits": 2
 }
 ```
-
-Send this JSON to `POST /jobs/submit?policy=greedy`.
 
 ## Run a benchmark
 
 From the repository root:
 
-```bash
+``` bash
 PYTHONPATH=backend python -m app.benchmark
+```
+
+The default benchmark generates 20 jobs and compares `random`, `greedy`,
+and `predictive` policies. It writes a report to:
+
+``` text
+reports/benchmark_results.json
 ```
 
 The benchmark can also be called from Python:
 
-```python
+``` python
 from app.benchmark import run_benchmark
 
 report = run_benchmark(
@@ -169,55 +210,81 @@ report = run_benchmark(
 print(report)
 ```
 
-Using the same seed creates comparable synthetic workload inputs for each policy. Wall-clock simulator time and modeled execution cost are different measurements and should be interpreted separately.
+The same seed generates comparable workload inputs for each policy. The
+report includes modeled execution metrics and wall-clock duration. These
+are different measurements and should be interpreted separately.
+
+## Example benchmark results
+
+One recorded 20-job run produced the following results. Results can vary
+between runs because execution timing and simulator performance are
+environment-dependent.
+
+  Metric                     Random   Greedy   Predictive
+  ------------------------ -------- -------- ------------
+  Total cost                 0.7268   0.2805       0.2789
+  Average wait time (s)      0.0001   0.1900       0.7871
+  Average turnaround (s)     0.0094   0.2341       0.8477
+  Deadline violations             0        0            0
+  Failed jobs                     0        0            0
+  Wall-clock time (s)        0.7324   0.7696       0.7593
+
+In this run, Greedy had the lowest average wait and turnaround times.
+Predictive had a slightly lower total modeled cost. This single run is
+illustrative, not a statistically conclusive performance comparison.
 
 ## Current limitations
 
-- The current `QueueManager` is synchronous; queue lengths passed to a policy do not yet represent a live asynchronous queue.
-- The classical executor simulates runtime rather than performing CPU-intensive work.
-- Qiskit Aer simulation time is not a prediction of real QPU hardware latency or provider queue time.
-- Runtime and cost estimates are supplied by the workload model; they are not learned from historical data.
-- Benchmark conclusions should be based on repeated runs and larger workloads, not a single small sample.
-- The API is intended for local development; authentication, rate limiting, and production hardening are not yet included.
+-   Queue estimates are based on queue lengths, not detailed runtime
+    estimates for every waiting job.
+-   The classical executor simulates runtime rather than performing
+    CPU-intensive application work.
+-   Qiskit Aer simulation time is not a prediction of real QPU hardware
+    latency or provider queue time.
+-   Runtime and cost estimates are supplied by the synthetic workload
+    model; they are not learned from historical data.
+-   The system uses in-memory execution pools and metrics; it does not
+    provide distributed workers or persistent job storage.
+-   The API is intended for local development. Authentication, rate
+    limiting, and production hardening are not included.
 
-## Roadmap
+## Project status
 
-- [x] Job model and lifecycle
-- [x] Classical and quantum simulator executors
-- [x] Three scheduling policies
-- [x] Metrics collection and synchronous orchestration
-- [x] Synthetic workload generation
-- [x] Initial policy benchmarking
-- [x] Initial FastAPI service implementation
-- [ ] Validate API tests and end-to-end behavior
-- [ ] Profile and optimize repeated quantum circuit compilation
-- [ ] Add asynchronous workers with Redis and Celery
-- [ ] Add persistent job and benchmark storage
-- [ ] Build a React dashboard
-- [ ] Add Docker Compose deployment
-- [ ] Add CI and expanded performance experiments
+Implemented:
+
+-   [x] Job model and lifecycle
+-   [x] Classical and simulated quantum executors
+-   [x] Random, Greedy, and Predictive scheduling policies
+-   [x] Concurrent classical and quantum worker pools
+-   [x] Metrics collection
+-   [x] Synthetic workload generation
+-   [x] Policy benchmarking
+-   [x] FastAPI service
+-   [x] Automated test suite (43 passing tests)
+
+Not included in the current scope:
+
+-   [ ] Redis / Celery distributed task processing
+-   [ ] Persistent job and benchmark storage
+-   [ ] React monitoring dashboard
+-   [ ] Docker Compose deployment
+-   [ ] Production authentication and deployment hardening
+
+These are possible future extensions, not requirements for running the
+current project.
 
 ## Development
 
-Run the tests before committing:
+Before committing changes, run:
 
-```bash
+``` bash
 PYTHONPATH=backend pytest backend/tests/ -v
 git status
 ```
 
-Use small, meaningful commits, for example:
-
-```text
-feat: implement QLB scheduling and benchmarking core
-feat: expose scheduling through FastAPI
-perf: optimize quantum circuit execution
-feat: add asynchronous task processing
-feat: add React monitoring dashboard
-build: add Docker Compose deployment
-docs: document architecture and benchmark results
-```
+Use small, meaningful commits that describe the change.
 
 ## License
 
-No license has been selected yet. Add a `LICENSE` file before describing the repository as open source.
+No license has been selected yet. Add a `LICENSE` file before describing
+the repository as open source.
