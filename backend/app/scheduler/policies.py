@@ -71,7 +71,6 @@ class GreedyCostLatencyPolicy(SchedulingPolicy):
         classical_queue_len: int,
         quantum_queue_len: int,
     ) -> ExecutionTarget:
-        # High-priority jobs prioritize completion time over cost.
         if job.priority >= 4:
             classical_score = (
                 job.classical_runtime * (classical_queue_len + 1)
@@ -98,10 +97,10 @@ class GreedyCostLatencyPolicy(SchedulingPolicy):
 
 
 class PredictiveDeadlineAwarePolicy(GreedyCostLatencyPolicy):
-    """Use greedy scheduling, then override if needed to meet a deadline."""
+    """Choose resources using estimated completion time and deadlines."""
 
-    def __init__(self):
-        super().__init__(cost_weight=0.4, latency_weight=0.6)
+    def __init__(self,cost_weight: float=0.4, latency_weight: float=0.6):
+        super().__init__(cost_weight=cost_weight, latency_weight=latency_weight)
 
     def decide(
         self,
@@ -140,17 +139,27 @@ class PredictiveDeadlineAwarePolicy(GreedyCostLatencyPolicy):
             quantum_time <= seconds_remaining
         )
 
-        if greedy_choice == ExecutionTarget.CLASSICAL:
-            if (
-                not classical_meets_deadline
-                and quantum_meets_deadline
-            ):
-                return ExecutionTarget.QUANTUM
-        else:
-            if (
-                not quantum_meets_deadline
-                and classical_meets_deadline
-            ):
+        # Only one resource can meet the deadline.
+        if classical_meets_deadline and not quantum_meets_deadline:
+            return ExecutionTarget.CLASSICAL
+
+        if quantum_meets_deadline and not classical_meets_deadline:
+            return ExecutionTarget.QUANTUM
+
+        # Neither resource can meet the deadline.
+        if not classical_meets_deadline and not quantum_meets_deadline:
+            if classical_time <= quantum_time:
                 return ExecutionTarget.CLASSICAL
 
+            return ExecutionTarget.QUANTUM
+
+        # Both resources can meet the deadline.
+        # Preserve speed priority for high-priority jobs.
+        if job.priority >= 4:
+            if classical_time <= quantum_time:
+                return ExecutionTarget.CLASSICAL
+
+            return ExecutionTarget.QUANTUM
+
+        # For lower-priority jobs, use the greedy cost-latency choice.
         return greedy_choice
